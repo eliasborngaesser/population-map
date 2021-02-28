@@ -169,7 +169,6 @@ function initMap() {
     elevationLayer = L.geoJSON()
     populationLayer = L.geoJSON()
     BasicControl = L.control.layers(baseLayers, {}).addTo(map);
-    L.control.slideMenu(projectHandling).addTo(map);
 
 
 
