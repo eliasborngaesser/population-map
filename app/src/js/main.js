@@ -1,6 +1,8 @@
 var geoJSONdata
-var elevationLayer
-var populationLayer
+var elevationLayer = L.geoJSON()
+var populationLayer = L.geoJSON()
+var elevationLayerIsActive = false
+var populationLayerIsActive = false
 var citiesLayer
 var min_elevation
 var min_population
@@ -17,10 +19,12 @@ function getColor(value, boundaries) {
     }
 }
 function elevationFilter(feature) {
-    if (feature.properties.elevation >= min_elevation) return true
+    if (feature.properties.elevation >= min_elevation)
+        return true
 }
 function populationFilter(feature) {
-    if (feature.properties.pop_max >= min_population) return true
+    if (feature.properties.pop_max >= min_population)
+        return true
 }
 // function setOverlay() {
 //     map.removeLayer(myLayer);
@@ -39,7 +43,6 @@ function populationFilter(feature) {
 // }
 function setElevationOverlay() {
     map.removeLayer(elevationLayer);
-    elevationLayer.remove();
     min_elevation = boundaries_elevation[map.getZoom() - 2]
 
     elevationLayer = L.geoJson(geoJSONdata, {
@@ -47,14 +50,16 @@ function setElevationOverlay() {
         ,
         onEachFeature:
             function (feature, layer) {
-                layer.setIcon(L.AwesomeMarkers.icon({ icon: 'mountain', markerColor: getColor(feature.properties.elevation, boundaries_elevation) }));
+                layer.setIcon(L.AwesomeMarkers.icon({ icon: 'mountain', prefix: 'fa', markerColor: getColor(feature.properties.elevation, boundaries_elevation) }));
                 layer.bindPopup(feature.properties.name + "<br>" + feature.properties.elevation);
             }
     })
+    if (elevationLayerIsActive) {
+        elevationLayer.addTo(map)
+    }
 }
 function setPopulationOverlay() {
     map.removeLayer(populationLayer);
-    populationLayer.remove();
     min_population = boundaries_cities[map.getZoom() - 2]
 
     populationLayer = L.geoJson(geoJSONdata, {
@@ -62,10 +67,13 @@ function setPopulationOverlay() {
         ,
         onEachFeature:
             function (feature, layer) {
-                layer.setIcon(L.AwesomeMarkers.icon({ markerColor: getColor(feature.properties.pop_max, boundaries_cities) }));
+                layer.setIcon(L.AwesomeMarkers.icon({ icon: 'city', prefix: 'fa', markerColor: getColor(feature.properties.pop_max, boundaries_cities) }));
                 layer.bindPopup(feature.properties.name + "<br>" + feature.properties.pop_max);
             }
     })
+    if (populationLayerIsActive) {
+        populationLayer.addTo(map)
+    }
 }
 // function setOverlay() {
 //     map.removeLayer(myLayer);
@@ -87,7 +95,17 @@ function setPopulationOverlay() {
 //     myLayer.addTo(map)
 // }
 
+function refreshElevationData(e) {
+
+    getElevationData(e)
+
+}
+function refreshPopulationData(e) {
+    getPopulationData(e)
+}
+
 function getElevationData(e) {
+
     url = "https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_10m_geography_regions_elevation_points.geojson"
     $.get(url, function (data) {
         geoJSONdata = JSON.parse(data)
@@ -150,16 +168,38 @@ function initMap() {
     var baseLayers = getCommonBaseLayers(map); //from baselayers js
     elevationLayer = L.geoJSON()
     populationLayer = L.geoJSON()
-    BasicControl = L.control.groupedLayers(baseLayers, controlOptions).addTo(map);
+    BasicControl = L.control.layers(baseLayers, {}).addTo(map);
     L.control.slideMenu(projectHandling).addTo(map);
 
 
 
-    map.on('zoomend', getElevationData);
-    map.on('zoomend', getPopulationData);
+    map.on('zoomend', refreshElevationData);
+    map.on('zoomend', refreshPopulationData);
+    map.on('overlayadd', function (eventLayer) {
+        if (eventLayer.name == 'Cities') {
+            populationLayerIsActive = true
+            refreshPopulationData()
 
-    // map.on('zoomend', getCitiesData);
-    // map.on('moveend', getCitiesData);
+
+        }
+        if (eventLayer.name == 'Mountains') {
+            elevationLayerIsActive = true
+            refreshElevationData()
+
+        }
+
+    });
+    map.on('overlayremove', function (eventLayer) {
+        if (eventLayer.name == 'Cities') {
+            populationLayer.remove();
+            populationLayerIsActive = false
+        }
+        if (eventLayer.name == 'Mountains') {
+            elevationLayer.remove();
+            elevationLayerIsActive = false
+        }
+
+    });
     return {
         map: map,
     };
@@ -170,9 +210,9 @@ var mapStuff = initMap();
 var map = mapStuff.map;
 getElevationData();
 getPopulationData();
+
 BasicControl.addOverlay(elevationLayer, "Mountains", "Landmarks");
 BasicControl.addOverlay(populationLayer, "Cities", "Landmarks");
-
 //Changing Default Cursor
 $('.leaflet-container').css('cursor', 'crosshair');
 $(function () {
