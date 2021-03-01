@@ -1,13 +1,14 @@
-var geoJSONdata
-var elevationLayer = L.geoJSON()
-var populationLayer = L.geoJSON()
-var elevationLayerIsActive = false
-var populationLayerIsActive = false
+var elevationData
+var populationData
 var citiesLayer
 var min_elevation
 var min_population
-var boundaries_cities = [15000000, 8000000, 4000000, 1000000, 600000, 300000, 100000, 20000, 10000, 2000, 100]
-var boundaries_elevation = [7000, 6000, 5000, 4000, 3000, 2000, 1000, 100]
+var elevationLayer = L.geoJSON()
+var populationLayer = L.geoJSON()
+var populationLayerIsActive = false
+var elevationLayerIsActive = false
+var boundaries_cities = [12000000, 8000000, 4000000, 2000000, 1000000, 500000, 200000, 100000, 20000, 10000, 2000, 100]
+var boundaries_elevation = [7000, 6000, 5000, 4000, 3000, 2000, 1000, 100, 0, 0, 0]
 var colors = ['darkred', 'red', 'orange', 'purple', 'darkpurple', 'cadetblue', 'blue', 'green', 'darkgreen']
 var BasicControl
 function getColor(value, boundaries) {
@@ -18,34 +19,32 @@ function getColor(value, boundaries) {
         }
     }
 }
+function get_population(feature) {
+
+    if (feature.properties.pop_min > feature.properties.pop_max * 0.1)
+        return feature.properties.pop_min
+    if (feature.properties.pop_other > 0 && feature.properties.pop_other < feature.properties.pop_max)
+        return feature.properties.pop_other
+    return feature.properties.pop_max
+}
 function elevationFilter(feature) {
-    if (feature.properties.elevation >= min_elevation)
+    position = L.latLng(feature.geometry.coordinates[1], feature.geometry.coordinates[0])
+    bounds = map.getBounds()
+    if (feature.properties.elevation >= min_elevation && bounds.contains(position))
         return true
 }
 function populationFilter(feature) {
-    if (feature.properties.pop_max >= min_population)
+    position = L.latLng(feature.geometry.coordinates[1], feature.geometry.coordinates[0])
+    bounds = map.getBounds()
+    if (get_population(feature) >= min_population && bounds.contains(position))
         return true
 }
-// function setOverlay() {
-//     map.removeLayer(myLayer);
-//     myLayer.remove();
-
-//     myLayer = L.geoJson(geoJSONdata,
-//         {
-//             onEachFeature:
-//                 function (feature, layer) {
-//                     console.debug(feature.properties.POP)
-//                     console.debug(getColor(feature.properties.POP))
-//                     layer.setIcon(L.AwesomeMarkers.icon({ markerColor: getColor(feature.properties.POP) }));
-//                     layer.bindPopup(feature.properties.CITY_NAME + "<br>" + feature.properties.POP);
-//                 }
-//         }).addTo(map);
-// }
 function setElevationOverlay() {
-    map.removeLayer(elevationLayer);
+    if (elevationLayerIsActive)
+        elevationLayer.remove()
+    elevationLayerIsActive = true
     min_elevation = boundaries_elevation[map.getZoom() - 2]
-
-    elevationLayer = L.geoJson(geoJSONdata, {
+    elevationLayer = L.geoJson(elevationData, {
         filter: elevationFilter
         ,
         onEachFeature:
@@ -53,92 +52,50 @@ function setElevationOverlay() {
                 layer.setIcon(L.AwesomeMarkers.icon({ icon: 'mountain', prefix: 'fa', markerColor: getColor(feature.properties.elevation, boundaries_elevation) }));
                 layer.bindPopup(feature.properties.name + "<br>" + feature.properties.elevation);
             }
-    })
-    if (elevationLayerIsActive) {
-        elevationLayer.addTo(map)
-    }
+    }).addTo(map)
 }
 function setPopulationOverlay() {
-    map.removeLayer(populationLayer);
-    min_population = boundaries_cities[map.getZoom() - 2]
 
-    populationLayer = L.geoJson(geoJSONdata, {
+    if (populationLayerIsActive)
+        populationLayer.remove()
+    populationLayerIsActive = true
+    min_population = boundaries_cities[map.getZoom() - 2]
+    populationLayer = L.geoJson(populationData, {
         filter: populationFilter
         ,
         onEachFeature:
             function (feature, layer) {
-                layer.setIcon(L.AwesomeMarkers.icon({ icon: 'city', prefix: 'fa', markerColor: getColor(feature.properties.pop_max, boundaries_cities) }));
-                layer.bindPopup(feature.properties.name + "<br>" + feature.properties.pop_max);
+                layer.setIcon(L.AwesomeMarkers.icon({ icon: 'city', prefix: 'fa', markerColor: getColor(get_population(feature), boundaries_cities) }));
+                layer.bindPopup(feature.properties.name + "<br>" + get_population(feature));
             }
-    })
-    if (populationLayerIsActive) {
-        populationLayer.addTo(map)
-    }
+    }).addTo(map)
 }
-// function setOverlay() {
-//     map.removeLayer(myLayer);
-//     myLayer.remove();
-
-//     myLayer = L.layerGroup()
-//     for (i in geoJSONdata) {
-//         city = geoJSONdata[i]
-//         layer = L.geoJson(city.geometry, {
-//             onEachFeature:
-//                 function (feature, layer) {
-//                     console.debug(city.fields.population)
-//                     console.debug(getColor(city.fields.population))
-//                     layer.setIcon(L.AwesomeMarkers.icon({ markerColor: getColor(city.fields.population) }));
-//                     layer.bindPopup(city.fields.city + "<br>" + city.fields.population);
-//                 }
-//         }).addTo(myLayer);
-//     }
-//     myLayer.addTo(map)
-// }
 
 function refreshElevationData(e) {
-
-    getElevationData(e)
+    if (elevationLayerIsActive)
+        setElevationOverlay()
 
 }
 function refreshPopulationData(e) {
-    getPopulationData(e)
+    if (populationLayerIsActive)
+        setPopulationOverlay()
 }
 
-function getElevationData(e) {
+function getElevationData() {
 
     url = "https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_10m_geography_regions_elevation_points.geojson"
     $.get(url, function (data) {
-        geoJSONdata = JSON.parse(data)
-        setElevationOverlay()
+        elevationData = JSON.parse(data)
     });
 }
 
-function getPopulationData(e) {
+function getPopulationData() {
     url = "https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_10m_populated_places_simple.geojson"
     $.get(url, function (data) {
-        geoJSONdata = JSON.parse(data)
-        setPopulationOverlay()
+        populationData = JSON.parse(data)
+
     });
 }
-// var southWest = map.getBounds().getSouthWest().lat + "," + map.getBounds().getSouthWest().lng;
-// var southEast = map.getBounds().getSouthEast().lat + "," + map.getBounds().getSouthEast().lng;
-// var northWest = map.getBounds().getNorthWest().lat + "," + map.getBounds().getNorthWest().lng;
-// var northEast = map.getBounds().getNorthEast().lat + "," + map.getBounds().getNorthEast().lng;
-// var bbox = "(" + northWest + "),(" + northEast + "),(" + southEast + "),(" + southWest + ")"
-// url = "https://data.opendatasoft.com/api/records/1.0/search/?dataset=worldcitiespop%40public&rows=1000&q=population%3E"
-// url = url + boundaries[map.getZoom() - 2] + "&geofilter.polygon=" + bbox
-// $.get(url, function (data) {
-//     geoJSONdata = data.records
-//     setOverlay()
-// });
-
-//var bbox = map.getBounds().toBBoxString()
-//url = "https://services.arcgis.com/P3ePLMYs2RVChkJx/ArcGIS/rest/services/World_Cities/FeatureServer/0/query?outFields=CITY_NAME%2CPOP&f=pgeojson&where=POP%3E%3D"
-//alert(boundaries[map.getZoom() - 2])
-// $.get(url + boundaries[map.getZoom() - 2] + "&geometry=" + bbox, function (data) {
-//     geoJSONdata = JSON.parse(data)
-//     setOverlay()
-// });
 
 
 
@@ -166,31 +123,30 @@ function initMap() {
     };
 
     var baseLayers = getCommonBaseLayers(map); //from baselayers js
-    elevationLayer = L.geoJSON()
-    populationLayer = L.geoJSON()
+
     BasicControl = L.control.layers(baseLayers, {}).addTo(map);
 
 
 
     map.on('zoomend', refreshElevationData);
     map.on('zoomend', refreshPopulationData);
+    map.on('move', refreshElevationData);
+    map.on('move', refreshPopulationData);
     map.on('overlayadd', function (eventLayer) {
         if (eventLayer.name == 'Cities') {
-            populationLayerIsActive = true
-            refreshPopulationData()
+            setPopulationOverlay()
 
 
         }
         if (eventLayer.name == 'Mountains') {
-            elevationLayerIsActive = true
-            refreshElevationData()
+            setElevationOverlay()
 
         }
 
     });
     map.on('overlayremove', function (eventLayer) {
-        if (eventLayer.name == 'Cities') {
-            populationLayer.remove();
+        if (eventLayer == populationLayer || eventLayer.name == 'Cities') {
+            map.removeLayer(populationLayer)
             populationLayerIsActive = false
         }
         if (eventLayer.name == 'Mountains') {
